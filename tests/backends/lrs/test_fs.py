@@ -151,6 +151,20 @@ def test_backends_lrs_fs_default_instantiation(monkeypatch, fs):
             },
             [],
         ),
+        # 32. Query by voidedStatementId.
+        ({"voidedStatementId": "1"}, ["1"]),
+        # 33. Query by voidedStatementId (no match).
+        ({"voidedStatementId": "nonexistent"}, []),
+        # 34. Query by voidedStatementId and agent with mbox IFI.
+        (
+            {"voidedStatementId": "1", "agent": {"mbox": "mailto:foo@bar.baz"}},
+            ["1"],
+        ),
+        # 35. Query by voidedStatementId and agent with mbox IFI (no match).
+        (
+            {"voidedStatementId": "1", "agent": {"mbox": "mailto:bar@bar.baz"}},
+            [],
+        ),
     ],
 )
 def test_backends_lrs_fs_query_statements_query(

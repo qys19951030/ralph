@@ -53,10 +53,16 @@ class ClickHouseLRSBackend(
         if "statement_id" in ch_params:
             ch_params["statementId"] = ch_params["statement_id"]
 
+        if "voided_statement_id" in ch_params:
+            ch_params["voidedStatementId"] = ch_params["voided_statement_id"]
+
         where = []
 
         if params.statement_id:
             where.append("event_id = {statementId:UUID}")
+
+        if params.voided_statement_id:
+            where.append("event_id = {voidedStatementId:UUID}")
 
         self._add_agent_filters(ch_params, where, params.agent, "actor")
         ch_params.pop("agent", None)

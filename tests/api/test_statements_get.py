@@ -394,6 +394,64 @@ async def test_api_statements_get_by_statement_id(
 
 
 @pytest.mark.anyio
+async def test_api_statements_get_by_voided_statement_id(
+    client, insert_statements_and_monkeypatch_backend, basic_auth_credentials
+):
+    """Test the get statements API route, given a "voidedStatementId" query parameter,
+    should return a list of statements matching the given voidedStatementId.
+    """
+
+    statements = [
+        {
+            "id": "be67b160-d958-4f51-b8b8-1892002dbac6",
+            "timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
+        },
+        {
+            "id": "72c81e98-1763-4730-8cfc-f5ab34f1bad2",
+            "timestamp": datetime.now().isoformat(),
+        },
+    ]
+    insert_statements_and_monkeypatch_backend(statements)
+
+    response = await client.get(
+        f"/xAPI/statements/?voidedStatementId={statements[1]['id']}",
+        headers={"Authorization": f"Basic {basic_auth_credentials}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"statements": [statements[1]]}
+
+
+@pytest.mark.anyio
+async def test_api_statements_get_by_voided_statement_id_no_match(
+    client, insert_statements_and_monkeypatch_backend, basic_auth_credentials
+):
+    """Test the get statements API route, given a "voidedStatementId" query parameter
+    that matches no statement, should return an empty list.
+    """
+
+    statements = [
+        {
+            "id": "be67b160-d958-4f51-b8b8-1892002dbac6",
+            "timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
+        },
+        {
+            "id": "72c81e98-1763-4730-8cfc-f5ab34f1bad2",
+            "timestamp": datetime.now().isoformat(),
+        },
+    ]
+    insert_statements_and_monkeypatch_backend(statements)
+
+    response = await client.get(
+        "/xAPI/statements/?voidedStatementId=66c81e98-1763-4730-8cfc-f5ab34f1bad5",
+        headers={"Authorization": f"Basic {basic_auth_credentials}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"statements": []}
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "ifi",
     [

@@ -65,6 +65,7 @@ class FSLRSBackend(BaseLRSBackend[FSLRSBackendSettings], FSDataBackend):
         """Return the statements query payload using xAPI parameters."""
         filters = []
         self._add_filter_by_id(filters, params.statement_id)
+        self._add_filter_by_voided_statement_id(filters, params.voided_statement_id)
         self._add_filter_by_agent(filters, params.agent, params.related_agents)
         self._add_filter_by_authority(filters, params.authority)
         self._add_filter_by_verb(filters, params.verb)
@@ -170,6 +171,19 @@ class FSLRSBackend(BaseLRSBackend[FSLRSBackendSettings], FSDataBackend):
 
         if statement_id:
             filters.append(match_statement_id)
+
+    @staticmethod
+    def _add_filter_by_voided_statement_id(
+        filters: list, voided_statement_id: Optional[str]
+    ) -> None:
+        """Add the `match_voided_statement_id` filter if `voided_statement_id` is set."""
+
+        def match_voided_statement_id(statement: dict) -> bool:
+            """Return `True` if the statement has the given `voided_statement_id`."""
+            return statement.get("id") == voided_statement_id
+
+        if voided_statement_id:
+            filters.append(match_voided_statement_id)
 
     @staticmethod
     def _get_related_agents(statement: dict) -> Iterable[dict]:

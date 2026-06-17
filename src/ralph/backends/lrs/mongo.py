@@ -80,6 +80,9 @@ class MongoLRSBackend(BaseLRSBackend[MongoLRSBackendSettings], MongoDataBackend)
         if params.statement_id:
             mongo_query_filters.update({"_source.id": params.statement_id})
 
+        if params.voided_statement_id:
+            mongo_query_filters.update({"_source.id": params.voided_statement_id})
+
         MongoLRSBackend._add_agent_filters(mongo_query_filters, params.agent, "actor")
         MongoLRSBackend._add_agent_filters(
             mongo_query_filters, params.authority, "authority"

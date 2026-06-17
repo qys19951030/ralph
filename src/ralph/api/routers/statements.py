@@ -160,7 +160,7 @@ async def get(  # noqa: PLR0913
     voided_statement_id: Annotated[
         Optional[str],
         Query(
-            description="**Not implemented** Id of voided Statement to fetch",
+            description="Id of voided Statement to fetch",
             alias="voidedStatementId",
         ),
     ] = None,
@@ -192,7 +192,6 @@ async def get(  # noqa: PLR0913
         Optional[UUID],
         Query(
             description=(
-                "**Not implemented** "
                 "Filter, only return Statements matching the specified registration id"
             ),
         ),

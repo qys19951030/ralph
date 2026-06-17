@@ -76,6 +76,9 @@ class ESLRSBackend(BaseLRSBackend[ESLRSBackendSettings], ESDataBackend):
         if params.statement_id:
             es_query_filters += [{"term": {"_id": params.statement_id}}]
 
+        if params.voided_statement_id:
+            es_query_filters += [{"term": {"_id": params.voided_statement_id}}]
+
         ESLRSBackend._add_agent_filters(es_query_filters, params.agent, "actor")
         ESLRSBackend._add_agent_filters(es_query_filters, params.authority, "authority")
 
