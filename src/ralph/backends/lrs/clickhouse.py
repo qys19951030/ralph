@@ -53,16 +53,24 @@ class ClickHouseLRSBackend(
         if "statement_id" in ch_params:
             ch_params["statementId"] = ch_params["statement_id"]
 
-        if "voided_statement_id" in ch_params:
-            ch_params["voidedStatementId"] = ch_params["voided_statement_id"]
-
         where = []
 
         if params.statement_id:
             where.append("event_id = {statementId:UUID}")
 
         if params.voided_statement_id:
-            where.append("event_id = {voidedStatementId:UUID}")
+            voided_verb_id = "http://adlnet.gov/expapi/verbs/voided"
+            ch_params["voidedVerbId"] = voided_verb_id
+            ch_params["voidedObjectId"] = params.voided_statement_id
+            where.append(
+                "JSONExtractString(event, 'verb', 'id') = {voidedVerbId:String}"
+            )
+            where.append(
+                "JSONExtractString(event, 'object', 'objectType') = 'StatementRef'"
+            )
+            where.append(
+                "JSONExtractString(event, 'object', 'id') = {voidedObjectId:String}"
+            )
 
         self._add_agent_filters(ch_params, where, params.agent, "actor")
         ch_params.pop("agent", None)

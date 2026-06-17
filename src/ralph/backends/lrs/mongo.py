@@ -81,7 +81,14 @@ class MongoLRSBackend(BaseLRSBackend[MongoLRSBackendSettings], MongoDataBackend)
             mongo_query_filters.update({"_source.id": params.statement_id})
 
         if params.voided_statement_id:
-            mongo_query_filters.update({"_source.id": params.voided_statement_id})
+            voided_verb_id = "http://adlnet.gov/expapi/verbs/voided"
+            mongo_query_filters.update(
+                {
+                    "_source.verb.id": voided_verb_id,
+                    "_source.object.objectType": "StatementRef",
+                    "_source.object.id": params.voided_statement_id,
+                }
+            )
 
         MongoLRSBackend._add_agent_filters(mongo_query_filters, params.agent, "actor")
         MongoLRSBackend._add_agent_filters(

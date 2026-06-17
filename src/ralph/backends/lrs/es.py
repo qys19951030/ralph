@@ -77,7 +77,12 @@ class ESLRSBackend(BaseLRSBackend[ESLRSBackendSettings], ESDataBackend):
             es_query_filters += [{"term": {"_id": params.statement_id}}]
 
         if params.voided_statement_id:
-            es_query_filters += [{"term": {"_id": params.voided_statement_id}}]
+            voided_verb_id = "http://adlnet.gov/expapi/verbs/voided"
+            es_query_filters += [
+                {"term": {"verb.id.keyword": voided_verb_id}},
+                {"term": {"object.objectType.keyword": "StatementRef"}},
+                {"term": {"object.id.keyword": params.voided_statement_id}},
+            ]
 
         ESLRSBackend._add_agent_filters(es_query_filters, params.agent, "actor")
         ESLRSBackend._add_agent_filters(es_query_filters, params.authority, "authority")

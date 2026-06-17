@@ -151,18 +151,40 @@ def test_backends_lrs_fs_default_instantiation(monkeypatch, fs):
             },
             [],
         ),
-        # 32. Query by voidedStatementId.
-        ({"voidedStatementId": "1"}, ["1"]),
-        # 33. Query by voidedStatementId (no match).
+        # 32. Query by statementId=9 should return the targeted statement itself.
+        ({"statementId": "9"}, ["9"]),
+        # 33. Query by voidedStatementId=9 should return the VOIDING statement
+        #     (id=10) that references id=9 via object.id, NOT id=9 itself.
+        #     This is the key semantic difference from statementId.
+        ({"voidedStatementId": "9"}, ["10"]),
+        # 34. Query by statementId=10 returns the voiding statement as a plain
+        #     statement, which is different from voidedStatementId=9 above.
+        ({"statementId": "10"}, ["10"]),
+        # 35. Query by voidedStatementId=10 returns nothing, because no statement
+        #     voids the voiding statement (id=10).
+        ({"voidedStatementId": "10"}, []),
+        # 36. Query by voidedStatementId with a completely unknown reference.
         ({"voidedStatementId": "nonexistent"}, []),
-        # 34. Query by voidedStatementId and agent with mbox IFI.
+        # 37. Statement with voided verb but wrong objectType (Activity instead of
+        #     StatementRef) must NOT be matched by voidedStatementId.
+        ({"voidedStatementId": "999"}, []),
+        # 38. Statement with StatementRef object but non-voided verb must NOT be
+        #     matched by voidedStatementId.
+        ({"voidedStatementId": "some-other-id"}, []),
+        # 39. voidedStatementId + agent filter on the voiding statement's actor.
         (
-            {"voidedStatementId": "1", "agent": {"mbox": "mailto:foo@bar.baz"}},
-            ["1"],
+            {
+                "voidedStatementId": "9",
+                "agent": {"mbox": "mailto:voider@bar.baz"},
+            },
+            ["10"],
         ),
-        # 35. Query by voidedStatementId and agent with mbox IFI (no match).
+        # 40. voidedStatementId + agent filter that does not match voiding actor.
         (
-            {"voidedStatementId": "1", "agent": {"mbox": "mailto:bar@bar.baz"}},
+            {
+                "voidedStatementId": "9",
+                "agent": {"mbox": "mailto:foo@bar.baz"},
+            },
             [],
         ),
     ],
@@ -283,6 +305,50 @@ def test_backends_lrs_fs_query_statements_query(
                 "objectType": "SubStatement",
                 "actor": {"mbox_sha1sum": "foo_sha1sum"},
             },
+        },
+        # 9. The "targeted" statement that is going to be voided.
+        {
+            "id": "9",
+            "actor": {"mbox": "mailto:foo@bar.baz"},
+            "verb": {"id": "foo_verb"},
+            "object": {"id": "foo_object"},
+            "timestamp": "2024-01-01T00:00:00+00:00",
+        },
+        # 10. The VOIDING statement for id=9: voided verb + StatementRef object.
+        #     `statementId=10` should find it (by its own id), and
+        #     `voidedStatementId=9` should ALSO find it (it voids id=9).
+        #     `statementId=9` should find the TARGETED statement above.
+        {
+            "id": "10",
+            "actor": {"mbox": "mailto:voider@bar.baz"},
+            "verb": {"id": "http://adlnet.gov/expapi/verbs/voided"},
+            "object": {
+                "objectType": "StatementRef",
+                "id": "9",
+            },
+            "timestamp": "2024-01-02T00:00:00+00:00",
+        },
+        # 11. Negative case: voided verb, but object is an Activity (not StatementRef).
+        {
+            "id": "11",
+            "actor": {"mbox": "mailto:voider@bar.baz"},
+            "verb": {"id": "http://adlnet.gov/expapi/verbs/voided"},
+            "object": {
+                "objectType": "Activity",
+                "id": "999",
+            },
+            "timestamp": "2024-01-03T00:00:00+00:00",
+        },
+        # 12. Negative case: StatementRef object, but verb is NOT "voided".
+        {
+            "id": "12",
+            "actor": {"mbox": "mailto:foo@bar.baz"},
+            "verb": {"id": "foo_verb"},
+            "object": {
+                "objectType": "StatementRef",
+                "id": "some-other-id",
+            },
+            "timestamp": "2024-01-04T00:00:00+00:00",
         },
     ]
     backend = fs_lrs_backend()

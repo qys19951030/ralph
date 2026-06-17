@@ -176,11 +176,28 @@ class FSLRSBackend(BaseLRSBackend[FSLRSBackendSettings], FSDataBackend):
     def _add_filter_by_voided_statement_id(
         filters: list, voided_statement_id: Optional[str]
     ) -> None:
-        """Add the `match_voided_statement_id` filter if `voided_statement_id` is set."""
+        """Add the `match_voided_statement_id` filter if `voided_statement_id` is set.
+
+        A voiding statement matches when:
+        - its `verb.id` is the protected voided verb IRI;
+        - its `object.objectType` is `"StatementRef"`;
+        - its `object.id` equals the requested `voided_statement_id`.
+        """
+
+        voided_verb_id = "http://adlnet.gov/expapi/verbs/voided"
 
         def match_voided_statement_id(statement: dict) -> bool:
-            """Return `True` if the statement has the given `voided_statement_id`."""
-            return statement.get("id") == voided_statement_id
+            """Return `True` for the voiding statement that targets the given id."""
+            verb = statement.get("verb", {})
+            if verb.get("id") != voided_verb_id:
+                return False
+            obj = statement.get("object", {})
+            if obj.get("objectType") != "StatementRef":
+                return False
+            object_id = obj.get("id")
+            if object_id is None:
+                return False
+            return str(object_id) == voided_statement_id
 
         if voided_statement_id:
             filters.append(match_voided_statement_id)

@@ -397,56 +397,129 @@ async def test_api_statements_get_by_statement_id(
 async def test_api_statements_get_by_voided_statement_id(
     client, insert_statements_and_monkeypatch_backend, basic_auth_credentials
 ):
-    """Test the get statements API route, given a "voidedStatementId" query parameter,
-    should return a list of statements matching the given voidedStatementId.
+    """Test the get statements API route with ``voidedStatementId``.
+
+    This test specifically demonstrates the semantic difference between
+    ``statementId`` and ``voidedStatementId``:
+
+    * ``statementId=TARGET`` returns the statement whose **own id** equals TARGET.
+    * ``voidedStatementId=TARGET`` returns the **voiding statement** (the one
+      with verb=http://adlnet.gov/expapi/verbs/voided and
+      object.objectType=StatementRef + object.id=TARGET), NOT the statement
+      whose own id is TARGET.
     """
 
-    statements = [
-        {
-            "id": "be67b160-d958-4f51-b8b8-1892002dbac6",
-            "timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
+    targeted_id = "be67b160-d958-4f51-b8b8-1892002dbac6"
+    voiding_id = "72c81e98-1763-4730-8cfc-f5ab34f1bad2"
+    distractor_id = "88c81e98-1763-4730-8cfc-f5ab34f1bad8"
+
+    targeted_statement = {
+        "id": targeted_id,
+        "actor": {"mbox": "mailto:learner@example.com"},
+        "verb": {"id": "http://example.com/verbs/completed"},
+        "object": {"id": "http://example.com/activities/quiz-1"},
+        "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
+    }
+    # The voiding statement: its own id is ``voiding_id``; it targets
+    # ``targeted_id`` via object.id (StatementRef).
+    voiding_statement = {
+        "id": voiding_id,
+        "actor": {"mbox": "mailto:admin@example.com"},
+        "verb": {"id": "http://adlnet.gov/expapi/verbs/voided"},
+        "object": {
+            "objectType": "StatementRef",
+            "id": targeted_id,
         },
-        {
-            "id": "72c81e98-1763-4730-8cfc-f5ab34f1bad2",
-            "timestamp": datetime.now().isoformat(),
-        },
-    ]
+        "timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
+    }
+    # Plain unrelated statement, should not be involved in either lookup.
+    distractor_statement = {
+        "id": distractor_id,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    statements = [targeted_statement, voiding_statement, distractor_statement]
     insert_statements_and_monkeypatch_backend(statements)
 
+    # 1. statementId=TARGET returns the targeted statement itself.
     response = await client.get(
-        f"/xAPI/statements/?voidedStatementId={statements[1]['id']}",
+        f"/xAPI/statements/?statementId={targeted_id}",
         headers={"Authorization": f"Basic {basic_auth_credentials}"},
     )
-
     assert response.status_code == 200
-    assert response.json() == {"statements": [statements[1]]}
+    assert response.json() == {"statements": [targeted_statement]}
+
+    # 2. voidedStatementId=TARGET returns the VOIDING statement (different id!),
+    #    NOT the targeted statement. This is the critical semantic distinction.
+    response = await client.get(
+        f"/xAPI/statements/?voidedStatementId={targeted_id}",
+        headers={"Authorization": f"Basic {basic_auth_credentials}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"statements": [voiding_statement]}
+
+    # 3. statementId=VOIDING_ID still returns the voiding statement as a
+    #    plain statement, i.e. a statement is findable by its own id regardless
+    #    of what it represents.
+    response = await client.get(
+        f"/xAPI/statements/?statementId={voiding_id}",
+        headers={"Authorization": f"Basic {basic_auth_credentials}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"statements": [voiding_statement]}
+
+    # 4. voidedStatementId=VOIDING_ID returns nothing because no statement
+    #    voids the voiding statement itself.
+    response = await client.get(
+        f"/xAPI/statements/?voidedStatementId={voiding_id}",
+        headers={"Authorization": f"Basic {basic_auth_credentials}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"statements": []}
 
 
 @pytest.mark.anyio
 async def test_api_statements_get_by_voided_statement_id_no_match(
     client, insert_statements_and_monkeypatch_backend, basic_auth_credentials
 ):
-    """Test the get statements API route, given a "voidedStatementId" query parameter
-    that matches no statement, should return an empty list.
+    """Test the get statements API route with ``voidedStatementId`` negative cases.
+
+    Verifies that statements which only partially look like a voiding statement
+    (e.g. have the voided verb but wrong objectType, or have a StatementRef
+    object but a non-voided verb) are NOT mistakenly matched.
     """
 
-    statements = [
-        {
-            "id": "be67b160-d958-4f51-b8b8-1892002dbac6",
-            "timestamp": (datetime.now() - timedelta(hours=1)).isoformat(),
-        },
-        {
-            "id": "72c81e98-1763-4730-8cfc-f5ab34f1bad2",
-            "timestamp": datetime.now().isoformat(),
-        },
-    ]
-    insert_statements_and_monkeypatch_backend(statements)
+    targeted_id = "be67b160-d958-4f51-b8b8-1892002dbac6"
+    # (a) Has voided verb but object is an Activity (not a StatementRef).
+    verb_only = {
+        "id": "a0000000-0000-0000-0000-000000000001",
+        "verb": {"id": "http://adlnet.gov/expapi/verbs/voided"},
+        "object": {"objectType": "Activity", "id": targeted_id},
+        "timestamp": datetime.now().isoformat(),
+    }
+    # (b) Has a StatementRef object with the targeted id, but verb is wrong.
+    object_only = {
+        "id": "a0000000-0000-0000-0000-000000000002",
+        "verb": {"id": "http://example.com/verbs/mentioned"},
+        "object": {"objectType": "StatementRef", "id": targeted_id},
+        "timestamp": datetime.now().isoformat(),
+    }
 
+    insert_statements_and_monkeypatch_backend([verb_only, object_only])
+
+    # Neither negative fixture should be matched by voidedStatementId.
+    response = await client.get(
+        f"/xAPI/statements/?voidedStatementId={targeted_id}",
+        headers={"Authorization": f"Basic {basic_auth_credentials}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"statements": []}
+
+    # A completely unknown id also returns an empty list.
     response = await client.get(
         "/xAPI/statements/?voidedStatementId=66c81e98-1763-4730-8cfc-f5ab34f1bad5",
         headers={"Authorization": f"Basic {basic_auth_credentials}"},
     )
-
     assert response.status_code == 200
     assert response.json() == {"statements": []}
 
